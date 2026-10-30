@@ -85,18 +85,35 @@ python -m tracker --force
 
 ## 排程執行
 
-### 由 Claude 的排程任務執行（不用設信箱）
+### 由 Claude 的排程任務執行（目前實際在跑的方式）
 
-Claude 的定時任務會定期開一個新 session，把這個 repo 拉下來執行
-`python -m tracker --no-email`，再把 `state.json` commit 回來當下次的基準。
-有降價時由 Claude 直接推播＋寄信給你，所以不需要 SMTP 設定、不需要應用程式密碼。
+Claude 的定時任務每天台灣時間 08:53、13:53、18:53 各開一個新 session，
+匿名 clone 這個 repo、執行 `python -m tracker --no-email`，有降價就由 Claude
+直接推播＋寄信。**不需要 SMTP 設定、不需要應用程式密碼、不需要任何憑證。**
 
-`--no-email` 會照常查詢並更新狀態，但不寄信；該通知時在最後印出 `NOTIFY:` 開頭的一行，
+`--no-email` 會照常查詢，該通知時在最後印出 `NOTIFY:` 開頭的一行，
 沒事則印 `NOTIFY: none`，方便排程的 session 判斷。
 
 ```bash
 python -m tracker --no-email
 ```
+
+#### 重要：基準是固定的
+
+排程刻意**不把狀態推回 repo**（觸發出來的 session 沒有推送權限，
+而取得推送權限需要憑證，不值得為了追蹤一件裙子而承擔那個風險）。
+
+所以 `state.json` 裡的 `effective` 是一個**人工維護的固定基準**，
+每次執行都拿它來比對。後果是：
+
+- 價格降下去之後，**每次執行都會再通知一次**（一天三次），直到基準被人工更新
+- 這是刻意的取捨：寧可吵，也不要靜默失效
+
+降價收到通知、也下手之後，把 `config.json` 的 `target_price` 設低一點，
+或直接更新 `state.json` 裡的 `effective`，重複通知就會停。
+
+要讓狀態自動累積的話，用下面的 GitHub Actions，它有 repo 的寫入權限，
+不需要額外憑證。
 
 ### 自己用 SMTP 寄信
 
