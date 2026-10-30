@@ -115,15 +115,15 @@ python -m tracker --no-email
 要讓狀態自動累積的話，用下面的 GitHub Actions，它有 repo 的寫入權限，
 不需要額外憑證。
 
-### GitHub Actions（不用設信箱，推薦）
-
-`.github/workflows/track.yml` 每小時查一次，有降價就在這個 repo 開一張 issue 並 @ 你，
-GitHub 會寄信、也會推播到 GitHub App。查價失敗時那次執行會失敗，GitHub 也會寄失敗通知信。
-每次查完會把 `state.json` commit 回 repo，當作下次比價的基準。
-
-到 Actions 頁手動按 Run workflow 並勾 `force`，就會開一張測試 issue，確認收得到通知。
-
 ### 自己用 SMTP 寄信
+
+#### GitHub Actions（不用自己的機器）
+
+1. 把上面那些變數加進 repo 的 Settings → Secrets and variables → Actions
+2. `.github/workflows/track.yml` 預設每小時查一次
+3. 每次查完會把 `state.json` commit 回 repo，當作下次比價的基準
+
+也可以到 Actions 頁手動按 Run workflow，勾 `force` 就會寄一封測試信。
 
 #### 自己的機器
 

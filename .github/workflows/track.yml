@@ -6,13 +6,12 @@ on:
   workflow_dispatch:
     inputs:
       force:
-        description: 不論有無降價都開一張通知 issue（測試用）
+        description: 不論有無降價都寄一封測試信
         type: boolean
         default: false
 
 permissions:
   contents: write
-  issues: write
 
 concurrency:
   group: price-tracker
@@ -28,33 +27,15 @@ jobs:
         with:
           python-version: "3.12"
 
-      # 不用設信箱：有降價就開一張 issue，GitHub 會寄信＋推播到 GitHub App 給 repo 擁有者。
-      - name: 查詢價格
-        id: check
-        run: |
-          set +e
-          python -m tracker --no-email ${{ inputs.force && '--force' || '' }} 2>&1 | tee out.txt
-          echo "code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
-
-      - name: 有降價就開 issue 通知
+      - name: 查詢並在降價時寄信
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          alerts=$(grep '^NOTIFY: ' out.txt | grep -v '^NOTIFY: none$' || true)
-          if [[ -z "$alerts" ]]; then
-            echo "沒有降價，不通知。"
-            exit 0
-          fi
-          {
-            echo "@${{ github.repository_owner }} 降價了，詳情如下（「+」開頭的是這個價位用得到的券，要自己去領）："
-            echo
-            echo '```'
-            cat out.txt
-            echo '```'
-          } > body.md
-          first=$(head -1 <<<"$alerts")
-          title="${first:8:60}"
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "降價通知：$title" --body-file body.md
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: python -m tracker ${{ inputs.force && '--force' || '' }}
 
       - name: 把最新狀態存回 repo
         run: |
@@ -63,13 +44,7 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add state.json
             git commit -m "chore: 更新價格紀錄"
-            git pull --rebase -X theirs
             git push
           else
             echo "價格沒變，不用寫入。"
           fi
-
-      # 抓不到頁面或解析失敗時讓這次執行失敗，GitHub 會寄失敗通知信。
-      - name: 查詢失敗
-        if: steps.check.outputs.code != '0'
-        run: exit 1
