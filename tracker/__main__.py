@@ -67,6 +67,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--state", type=Path, default=DEFAULT_STATE)
     parser.add_argument("--dry-run", action="store_true", help="只查詢並印出，不寄信也不寫狀態")
     parser.add_argument("--force", action="store_true", help="不論有無降價都寄信")
+    parser.add_argument(
+        "--no-email",
+        action="store_true",
+        help="照常查詢並更新狀態，但不寄信；該通知時在最後印出 NOTIFY: 開頭的一行",
+    )
     args = parser.parse_args(argv)
 
     config = json.loads(args.config.read_text(encoding="utf-8"))
@@ -76,6 +81,7 @@ def main(argv: list[str] | None = None) -> int:
     mail: MailConfig | None = None
     failures = 0
     sent = 0
+    alerts: list[str] = []
 
     for watch in config.get("watches", []):
         key = watch.get("id") or watch["url"]
@@ -93,7 +99,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.force and reason is None:
             reason = "測試信：目前狀態如下。"
 
-        if reason and not args.dry_run:
+        if reason:
+            alerts.append(f"NOTIFY: {watch.get('label') or snapshot.title} — {reason} "
+                          f"現在 NT${snapshot.effective:,.0f}（{format_rate(snapshot.discount_rate)}）{snapshot.url}")
+
+        if reason and args.no_email:
+            print("  -> （--no-email，不寄信）")
+        elif reason and not args.dry_run:
             if mail is None:
                 try:
                     mail = MailConfig.from_env()
@@ -116,6 +128,10 @@ def main(argv: list[str] | None = None) -> int:
         store.save()
 
     print(f"\n完成：寄出 {sent} 封，失敗 {failures} 項。")
+    for line in alerts:
+        print(line)
+    if not alerts:
+        print("NOTIFY: none")
     return 1 if failures else 0
 
 

@@ -85,7 +85,22 @@ python -m tracker --force
 
 ## 排程執行
 
-### GitHub Actions（不用自己的機器）
+### 由 Claude 的排程任務執行（不用設信箱）
+
+Claude 的定時任務會定期開一個新 session，把這個 repo 拉下來執行
+`python -m tracker --no-email`，再把 `state.json` commit 回來當下次的基準。
+有降價時由 Claude 直接推播＋寄信給你，所以不需要 SMTP 設定、不需要應用程式密碼。
+
+`--no-email` 會照常查詢並更新狀態，但不寄信；該通知時在最後印出 `NOTIFY:` 開頭的一行，
+沒事則印 `NOTIFY: none`，方便排程的 session 判斷。
+
+```bash
+python -m tracker --no-email
+```
+
+### 自己用 SMTP 寄信
+
+#### GitHub Actions（不用自己的機器）
 
 1. 把上面那些變數加進 repo 的 Settings → Secrets and variables → Actions
 2. `.github/workflows/track.yml` 預設每小時查一次
@@ -93,7 +108,7 @@ python -m tracker --force
 
 也可以到 Actions 頁手動按 Run workflow，勾 `force` 就會寄一封測試信。
 
-### 自己的機器
+#### 自己的機器
 
 ```cron
 17 * * * * cd /path/to/repo && /usr/bin/python3 -m tracker >> tracker.log 2>&1
