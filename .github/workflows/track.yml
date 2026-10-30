@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       force:
-        description: 不論有無降價都寄一封測試信
+        description: 不論有無降價都推播一則測試通知
         type: boolean
         default: false
 
@@ -27,14 +27,9 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: 查詢並在降價時寄信
+      - name: 查詢，降價就推播到手機
         env:
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASS: ${{ secrets.SMTP_PASS }}
-          MAIL_FROM: ${{ secrets.MAIL_FROM }}
-          MAIL_TO: ${{ secrets.MAIL_TO }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: python -m tracker ${{ inputs.force && '--force' || '' }}
 
       - name: 把最新狀態存回 repo

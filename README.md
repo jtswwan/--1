@@ -61,27 +61,41 @@ python -m tracker --dry-run   # 查一次並印出，不寄信也不寫檔
 
 想「再等折扣多些」的話，把 `target_price` 設在現在的 1,730 以下，例如 `1500`（約 68 折）。
 
-## 設定信箱
+## 設定通知（ntfy，約一分鐘）
 
-用環境變數，不要寫進檔案：
+不用註冊、不用帳號、不用 API key。
 
-| 變數 | 說明 |
-| --- | --- |
-| `SMTP_HOST` | 例如 `smtp.gmail.com` |
-| `SMTP_PORT` | 預設 `587`；填 `465` 會自動改用 SSL |
-| `SMTP_USER` | SMTP 帳號 |
-| `SMTP_PASS` | SMTP 密碼。**Gmail 要用「應用程式密碼」，不是你的登入密碼** |
-| `MAIL_FROM` | 寄件人，省略的話就用 `SMTP_USER` |
-| `MAIL_TO` | 收件人，多個用逗號分隔 |
+1. 手機裝 **ntfy** App（iOS App Store / Google Play 搜尋 ntfy，免費）
+2. 開 App → 右下角 **+** → 輸入頻道名稱 → 訂閱
+3. 把同一個頻道名稱加進 repo 的 Settings → Secrets and variables → Actions，
+   名稱 `NTFY_TOPIC`
 
-Gmail 的應用程式密碼要先開兩步驟驗證，再到 Google 帳戶 → 安全性 → 應用程式密碼 產生一組 16 碼。
+**頻道名稱等同密碼。** ntfy.sh 上任何人只要知道名稱就能看到、也能發訊息到那個頻道，
+所以要用一串隨機字，不要用 `skirt` 這種猜得到的，也不要寫進這個公開 repo。
 
-測一下信箱通不通：
+不裝 App 也行：用瀏覽器開 `https://ntfy.sh/你的頻道名稱` 就能看到訊息，
+但這樣手機不會跳通知。
+
+測一下通不通：
 
 ```bash
-export SMTP_HOST=smtp.gmail.com SMTP_USER=你的@gmail.com SMTP_PASS=應用程式密碼 MAIL_TO=你的@gmail.com
-python -m tracker --force
+NTFY_TOPIC=你的頻道名稱 python -m tracker --force
 ```
+
+手機應該會跳出一則通知，點下去會直接開商品頁。
+
+### 其他通知管道
+
+程式支援三條管道，用 `--notify` 指定，預設 `auto` 會依序找環境變數
+（`NTFY_TOPIC` → `LINE_*` → `SMTP_*`），找到哪個就用哪個。
+
+| 管道 | 需要的環境變數 | 設定難度 |
+| --- | --- | --- |
+| `ntfy` | `NTFY_TOPIC`（選用 `NTFY_SERVER`） | 最簡單，不用註冊 |
+| `line` | `LINE_CHANNEL_ACCESS_TOKEN`、`LINE_TO` | 要開 LINE Developers channel |
+| `email` | `SMTP_HOST`、`SMTP_USER`、`SMTP_PASS`、`MAIL_TO`（選用 `SMTP_PORT`、`MAIL_FROM`） | 要產 Gmail 應用程式密碼 |
+
+`--notify none` 則是照常查詢但不發通知，該通知時在最後印出 `NOTIFY:` 開頭的一行。
 
 ## 排程執行
 
@@ -119,11 +133,11 @@ python -m tracker --no-email
 
 #### GitHub Actions（不用自己的機器）
 
-1. 把上面那些變數加進 repo 的 Settings → Secrets and variables → Actions
+1. 把 `NTFY_TOPIC` 加進 repo 的 Settings → Secrets and variables → Actions
 2. `.github/workflows/track.yml` 預設每小時查一次
 3. 每次查完會把 `state.json` commit 回 repo，當作下次比價的基準
 
-也可以到 Actions 頁手動按 Run workflow，勾 `force` 就會寄一封測試信。
+也可以到 Actions 頁手動按 Run workflow，勾 `force` 就會推一則測試通知。
 
 #### 自己的機器
 

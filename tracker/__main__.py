@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
 
+from . import line as line_channel
+from . import notify as email_channel
+from . import push as push_channel
 from .discount import TAIPEI, format_rate
-from .notify import MailConfig, MailConfigError, send
 from .source import FetchError, Snapshot, fetch
 from .state import Store
 
@@ -61,6 +64,41 @@ def describe(snapshot: Snapshot) -> str:
     return "\n".join(lines)
 
 
+class _Sender:
+    """把兩種通知管道包成同一個介面。"""
+
+    def __init__(self, label: str, config, send_fn):
+        self.label = label
+        self._config = config
+        self._send_fn = send_fn
+
+    def send(self, snapshot: Snapshot, previous: dict | None, reason: str) -> None:
+        self._send_fn(self._config, snapshot, previous, reason)
+
+
+def _auto_channel(env: dict | None = None) -> str:
+    """沒指定管道時，照設定好的環境變數決定走哪條。"""
+    env = os.environ if env is None else env
+    if env.get("NTFY_TOPIC"):
+        return "ntfy"
+    if env.get("LINE_CHANNEL_ACCESS_TOKEN") and env.get("LINE_TO"):
+        return "line"
+    if env.get("SMTP_HOST") and env.get("MAIL_TO"):
+        return "email"
+    return "none"
+
+
+def _build_sender(channel: str) -> _Sender:
+    if channel == "ntfy":
+        cfg = push_channel.PushConfig.from_env()
+        return _Sender("ntfy 推播", cfg, push_channel.send)
+    if channel == "line":
+        cfg = line_channel.LineConfig.from_env()
+        return _Sender(f"LINE（{len(cfg.recipients)} 位收件人）", cfg, line_channel.send)
+    cfg = email_channel.MailConfig.from_env()
+    return _Sender(f"email（{', '.join(cfg.recipients)}）", cfg, email_channel.send)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="tracker", description="追蹤 91app 商品降價並寄信通知")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
@@ -68,9 +106,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="只查詢並印出，不寄信也不寫狀態")
     parser.add_argument("--force", action="store_true", help="不論有無降價都寄信")
     parser.add_argument(
+        "--notify",
+        choices=("auto", "ntfy", "line", "email", "none"),
+        default="auto",
+        help="走哪條通知管道。auto 看環境變數決定：依序找 NTFY_TOPIC、LINE_*、"
+        "SMTP_*，都沒有就不通知（預設 auto）",
+    )
+    parser.add_argument(
         "--no-email",
         action="store_true",
-        help="照常查詢並更新狀態，但不寄信；該通知時在最後印出 NOTIFY: 開頭的一行",
+        help="等同 --notify none：照常查詢，但不發通知",
     )
     args = parser.parse_args(argv)
 
@@ -78,7 +123,11 @@ def main(argv: list[str] | None = None) -> int:
     store = Store(args.state)
     now = datetime.now(tz=TAIPEI)
 
-    mail: MailConfig | None = None
+    channel = "none" if args.no_email else args.notify
+    if channel == "auto":
+        channel = _auto_channel()
+    sender = None
+
     failures = 0
     sent = 0
     alerts: list[str] = []
@@ -103,20 +152,27 @@ def main(argv: list[str] | None = None) -> int:
             alerts.append(f"NOTIFY: {watch.get('label') or snapshot.title} — {reason} "
                           f"現在 NT${snapshot.effective:,.0f}（{format_rate(snapshot.discount_rate)}）{snapshot.url}")
 
-        if reason and args.no_email:
-            print("  -> （--no-email，不寄信）")
-        elif reason and not args.dry_run:
-            if mail is None:
-                try:
-                    mail = MailConfig.from_env()
-                except MailConfigError as exc:
-                    print(f"[失敗] 無法寄信：{exc}", file=sys.stderr)
-                    return 2
-            send(mail, snapshot, previous, reason)
-            print(f"  -> 已寄出通知給 {', '.join(mail.recipients)}")
-            sent += 1
+        if reason and (channel == "none" or args.dry_run):
+            print(f"  -> （不發通知：{'dry-run' if args.dry_run else channel}）")
         elif reason:
-            print(f"  -> （dry-run，略過寄信）{reason}")
+            if sender is None:
+                try:
+                    sender = _build_sender(channel)
+                except (
+                    email_channel.MailConfigError,
+                    line_channel.LineConfigError,
+                    push_channel.PushConfigError,
+                ) as exc:
+                    print(f"[失敗] 無法發通知：{exc}", file=sys.stderr)
+                    return 2
+            try:
+                sender.send(snapshot, previous, reason)
+            except (line_channel.LineSendError, push_channel.PushSendError) as exc:
+                print(f"[失敗] 通知發送失敗：{exc}", file=sys.stderr)
+                failures += 1
+            else:
+                print(f"  -> 已透過 {sender.label} 通知")
+                sent += 1
 
         if not args.dry_run:
             store.put(key, snapshot.to_state())
@@ -127,7 +183,7 @@ def main(argv: list[str] | None = None) -> int:
         store.put("_heartbeat", {"week": now.strftime("%G-W%V")})
         store.save()
 
-    print(f"\n完成：寄出 {sent} 封，失敗 {failures} 項。")
+    print(f"\n完成：發出 {sent} 則通知，失敗 {failures} 項。")
     for line in alerts:
         print(line)
     if not alerts:
