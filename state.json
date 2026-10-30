@@ -1,0 +1,39 @@
+{
+  "_heartbeat": {
+    "week": "2026-W44"
+  },
+  "homeshop-11207741": {
+    "checked_at": "2026-10-30T14:39:39.102777+08:00",
+    "coupon_codes": [
+      "4JHASSSL",
+      "6NYBKJCM",
+      "CLRRWN4D",
+      "EZBLCEBE",
+      "G5AXNLWP",
+      "H99ZA5UX",
+      "M2D3KHNV",
+      "P37L3URS",
+      "RZWC8BZ2",
+      "TDE99WEY",
+      "TPBBKJXR",
+      "UBYCLPSJ",
+      "UQKUWRPA",
+      "V8R7YY4N",
+      "XGQ72AUD",
+      "XPPHULUU",
+      "ZH6T4MSE"
+    ],
+    "effective": 1730,
+    "list_price": 2190.0,
+    "price": 2190.0,
+    "promotion": "【春夏單品】單件79折",
+    "promotion_ids": [
+      606964,
+      615458,
+      617172
+    ],
+    "status": "Normal",
+    "title": "【初秋新品】HS 後鬆緊都會長裙 墨灰色",
+    "url": "https://www.homeshop.taipei/SalePage/Index/11207741?shopId=2224&utm_source=app_sharing&utm_medium=cpc&utm_campaign=SalePage%5B-11207741%5D"
+  }
+}
