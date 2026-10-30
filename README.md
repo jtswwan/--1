@@ -134,7 +134,7 @@ python -m tracker --no-email
 #### GitHub Actions（不用自己的機器）
 
 1. 把 `NTFY_TOPIC` 加進 repo 的 Settings → Secrets and variables → Actions
-2. `.github/workflows/track.yml` 預設每小時查一次
+2. `.github/workflows/track.yml` 目前**只保留手動觸發**，排程已停用（見下方說明）
 3. 每次查完會把 `state.json` commit 回 repo，當作下次比價的基準
 
 也可以到 Actions 頁手動按 Run workflow，勾 `force` 就會推一則測試通知。
@@ -205,3 +205,25 @@ state.json            自動產生的價格紀錄，不要手動改
 - 滿額、滿件的折扣不列入實付價計算，因為單買一件吃不到。
 - 折價券不會自動算進實付價，因為要自己去領、而且各有使用門檻。
 - 只支援 91app / NineYi 平台的商店頁（`*/SalePage/Index/*`）。
+
+## 為什麼排程不用 GitHub Actions
+
+`track.yml` 的 cron 設好之後五小時完全沒有觸發過，workflow 本身手動跑是成功的，
+所以問題出在 GitHub 的排程。GitHub 的 scheduled workflow 對新 repo 經常延遲很久
+甚至直接不跑，官方文件也說明排程是盡力而為、不保證準時。
+
+因此排程改用 Claude 的定時任務（每小時，實測準時觸發），指令是：
+
+```bash
+NTFY_TOPIC=你的頻道名稱 python3 -m tracker --no-state
+```
+
+`--no-state` 讓它照常查詢並推播，但不寫回 `state.json`——因為排程的執行環境
+沒有這個 repo 的推送權限，而取得推送權限需要憑證，不值得為了追蹤一件商品承擔
+那個風險。
+
+代價是 `state.json` 的基準不會自動更新，所以**降價後會每小時重複通知**，
+直到有人把基準改掉。這是刻意的取捨：寧可吵，也不要靜默失效。
+
+`track.yml` 保留下來供手動觸發用（Actions 頁面的 Run workflow），
+它有 repo 寫入權限，跑一次就能把基準更新成目前價格。

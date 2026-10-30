@@ -103,7 +103,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="tracker", description="追蹤 91app 商品降價並寄信通知")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--state", type=Path, default=DEFAULT_STATE)
-    parser.add_argument("--dry-run", action="store_true", help="只查詢並印出，不寄信也不寫狀態")
+    parser.add_argument("--dry-run", action="store_true", help="只查詢並印出，不發通知也不寫狀態")
+    parser.add_argument(
+        "--no-state",
+        action="store_true",
+        help="照常查詢並發通知，但不寫回 state.json（給沒有寫入權限的排程用）",
+    )
     parser.add_argument("--force", action="store_true", help="不論有無降價都寄信")
     parser.add_argument(
         "--notify",
@@ -174,10 +179,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  -> 已透過 {sender.label} 通知")
                 sent += 1
 
-        if not args.dry_run:
+        if not args.dry_run and not args.no_state:
             store.put(key, snapshot.to_state())
 
-    if not args.dry_run:
+    if not args.dry_run and not args.no_state:
         # GitHub 會在 repo 連續 60 天沒有新 commit 時自動停用排程。
         # 每週換一次這個值，確保至少每週有一次 commit 把排程續命。
         store.put("_heartbeat", {"week": now.strftime("%G-W%V")})

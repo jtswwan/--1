@@ -62,3 +62,23 @@ def test_compose_puts_price_in_title():
     title, body = compose(_snap(), {"effective": 1730}, "降價了")
     assert "1,533" in title
     assert "省 NT$197" in body
+
+
+def test_no_state_keeps_state_file_untouched(tmp_path):
+    """--no-state 要照常通知，但不能動 state.json（排程沒有寫入權限）。"""
+    import json
+
+    from tracker.__main__ import main
+
+    state = tmp_path / "state.json"
+    original = {"homeshop-11207741": {"effective": 9999, "promotion_ids": []}}
+    state.write_text(json.dumps(original), encoding="utf-8")
+
+    config = tmp_path / "config.json"
+    config.write_text(
+        json.dumps({"watches": [{"id": "homeshop-11207741", "url": "https://bmai.app/2b776daf"}]}),
+        encoding="utf-8",
+    )
+
+    main(["--config", str(config), "--state", str(state), "--no-state", "--notify", "none"])
+    assert json.loads(state.read_text(encoding="utf-8")) == original

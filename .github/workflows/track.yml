@@ -1,8 +1,9 @@
 name: 追蹤降價
 
+# 排程目前交給 Claude 的定時任務（每小時，實測準時）。
+# GitHub 的 cron 在這個 repo 設好五小時都沒觸發過，不可靠，
+# 因此停用排程只保留手動觸發，避免日後突然雙重通知。
 on:
-  schedule:
-    - cron: "17 * * * *"   # 每小時查一次（避開整點，整點排隊最塞）
   workflow_dispatch:
     inputs:
       force:
