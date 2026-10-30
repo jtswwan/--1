@@ -1,0 +1,50 @@
+name: 追蹤降價
+
+on:
+  schedule:
+    - cron: "0 1,5,9,13 * * *"   # UTC，約台灣時間 09:00 / 13:00 / 17:00 / 21:00
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 不論有無降價都寄一封測試信
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: price-tracker
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 查詢並在降價時寄信
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: python -m tracker ${{ inputs.force && '--force' || '' }}
+
+      - name: 把最新狀態存回 repo
+        run: |
+          if [[ -n "$(git status --porcelain state.json)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add state.json
+            git commit -m "chore: 更新價格紀錄"
+            git push
+          else
+            echo "價格沒變，不用寫入。"
+          fi
