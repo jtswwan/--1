@@ -15,7 +15,7 @@ import zlib
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from .discount import Promotion, effective_price, promotion_from_json
+from .discount import Coupon, Promotion, coupon_from_json, effective_price, promotion_from_json
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -124,6 +124,7 @@ class Snapshot:
     effective: float
     best_promotion: Promotion | None
     promotions: list[Promotion] = field(default_factory=list)
+    coupons: list[Coupon] = field(default_factory=list)
     status: str = ""
     checked_at: datetime | None = None
 
@@ -137,6 +138,29 @@ class Snapshot:
             return list(self.promotions)
         return [p for p in self.promotions if p.is_active(self.checked_at)]
 
+    @property
+    def usable_coupons(self) -> list[Coupon]:
+        """單買這一件用得到的券，同名只留一張。
+
+        店家常年掛著生日禮、開卡禮這類會員券，門檻遠高於單件價格，
+        全列出來只是雜訊。
+        """
+        seen: set[str] = set()
+        out = []
+        for c in self.coupons:
+            if c.min_spend and c.min_spend > self.effective:
+                continue
+            if c.name in seen:
+                continue
+            seen.add(c.name)
+            out.append(c)
+        return out
+
+    @property
+    def unpriced_promotions(self) -> list[Promotion]:
+        """進行中、但算不進實付價的活動（沒寫折數，或要湊滿額滿件）。"""
+        return [p for p in self.active_promotions if not p.applies_to_single_item]
+
     def to_state(self) -> dict:
         return {
             "title": self.title,
@@ -146,6 +170,7 @@ class Snapshot:
             "effective": self.effective,
             "promotion": self.best_promotion.name if self.best_promotion else None,
             "promotion_ids": sorted(p.id for p in self.active_promotions),
+            "coupon_codes": sorted(c.key for c in self.coupons),
             "status": self.status,
             "checked_at": self.checked_at.isoformat() if self.checked_at else None,
         }
@@ -165,6 +190,13 @@ def fetch(url: str, now: datetime) -> Snapshot:
     promotions = [promotion_from_json(p) for p in model.get("Promotions") or []]
     effective, best = effective_price(price, promotions, now)
 
+    coupons = []
+    for shop in model.get("ECoupons") or []:
+        for raw in shop.get("ECouponList") or []:
+            coupon = coupon_from_json(raw)
+            if coupon.is_active(now):
+                coupons.append(coupon)
+
     return Snapshot(
         sale_page_id=model.get("Id", 0),
         title=model.get("Title") or "(無標題)",
@@ -174,6 +206,7 @@ def fetch(url: str, now: datetime) -> Snapshot:
         effective=effective,
         best_promotion=best,
         promotions=promotions,
+        coupons=coupons,
         status=model.get("StatusDef") or "",
         checked_at=now,
     )

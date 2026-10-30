@@ -80,6 +80,36 @@ class Promotion:
         return f"{self.name}{suffix}，至 {self.end:%Y-%m-%d}"
 
 
+@dataclass(frozen=True)
+class Coupon:
+    """一張可領的折價券。
+
+    券不會自動套進實付價（要你自己去領、而且常有使用門檻），
+    但新出現的券等於變相降價，所以要通知。
+    """
+
+    key: str
+    name: str
+    discount_amount: float
+    discount_percent: float
+    min_spend: float
+    start: datetime
+    end: datetime
+
+    def is_active(self, now: datetime) -> bool:
+        return self.start <= now <= self.end
+
+    def describe(self) -> str:
+        if self.discount_amount:
+            value = f"折 NT${self.discount_amount:,.0f}"
+        elif 0 < self.discount_percent < 1:
+            value = format_rate(self.discount_percent)
+        else:
+            value = "優惠券"
+        threshold = f"，滿 NT${self.min_spend:,.0f} 可用" if self.min_spend else ""
+        return f"{self.name}（{value}{threshold}）"
+
+
 def _parse_dt(raw: str) -> datetime:
     """91app 吐的是台北時間的 naive 字串。"""
     return datetime.fromisoformat(raw).replace(tzinfo=TAIPEI)
@@ -110,3 +140,15 @@ def effective_price(price: float, promotions: list[Promotion], now: datetime) ->
     best = min(candidates, key=lambda p: p.rate)
     # 用四捨五入（而非 Python 的銀行家捨入），跟店家結帳一致
     return math.floor(price * best.rate + 0.5), best
+
+
+def coupon_from_json(raw: dict) -> Coupon:
+    return Coupon(
+        key=str(raw.get("Code") or raw.get("Id") or raw.get("Name") or ""),
+        name=raw.get("Name") or "(未命名優惠券)",
+        discount_amount=float(raw.get("DiscountPrice") or 0),
+        discount_percent=float(raw.get("DiscountPercent") or 0),
+        min_spend=float(raw.get("ECouponUsingMinPrice") or 0),
+        start=_parse_dt(raw["StartDateTime"]),
+        end=_parse_dt(raw["EndDateTime"]),
+    )

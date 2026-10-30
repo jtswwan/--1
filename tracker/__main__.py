@@ -27,14 +27,24 @@ def decide(snapshot: Snapshot, previous: dict | None, target_price: float | None
     """要寄信嗎？要的話回傳信裡的第一行，不用寄回 None。"""
     if previous is None:
         return None  # 第一次執行只記錄基準，不打擾
+
     before = previous.get("effective")
-    if before is None or snapshot.effective >= before:
-        return None
-    if target_price is not None and snapshot.effective > target_price:
-        return None  # 有降但還沒到你設的目標價
-    if target_price is not None:
-        return f"到你設的目標價了（NT${target_price:,.0f} 以下）。"
-    return "你在追的這件降價了。"
+    if before is not None and snapshot.effective < before:
+        if target_price is not None and snapshot.effective > target_price:
+            return None  # 有降但還沒到你設的目標價
+        if target_price is not None:
+            return f"到你設的目標價了（NT${target_price:,.0f} 以下）。"
+        return "你在追的這件降價了。"
+
+    # 價格沒降，但出現了算不出折扣的新活動（例如店家把活動取名「限時優惠」）。
+    # 寧可多問一句，也不要整檔活動錯過。
+    known = set(previous.get("promotion_ids") or [])
+    fresh = [p for p in snapshot.unpriced_promotions if p.id not in known]
+    if fresh:
+        names = "、".join(p.name for p in fresh)
+        return f"出現新活動「{names}」，程式算不出折扣率，可能比現在便宜，麻煩你自己看一下。"
+
+    return None
 
 
 def describe(snapshot: Snapshot) -> str:
@@ -46,6 +56,8 @@ def describe(snapshot: Snapshot) -> str:
     for p in snapshot.active_promotions:
         mark = "*" if p is snapshot.best_promotion else " "
         lines.append(f"  {mark} {p.describe()}")
+    for c in snapshot.usable_coupons:
+        lines.append(f"  + {c.describe()}")
     return "\n".join(lines)
 
 
@@ -98,6 +110,9 @@ def main(argv: list[str] | None = None) -> int:
             store.put(key, snapshot.to_state())
 
     if not args.dry_run:
+        # GitHub 會在 repo 連續 60 天沒有新 commit 時自動停用排程。
+        # 每週換一次這個值，確保至少每週有一次 commit 把排程續命。
+        store.put("_heartbeat", {"week": now.strftime("%G-W%V")})
         store.save()
 
     print(f"\n完成：寄出 {sent} 封，失敗 {failures} 項。")

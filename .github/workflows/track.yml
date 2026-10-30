@@ -2,7 +2,7 @@ name: 追蹤降價
 
 on:
   schedule:
-    - cron: "0 1,5,9,13 * * *"   # UTC，約台灣時間 09:00 / 13:00 / 17:00 / 21:00
+    - cron: "17 * * * *"   # 每小時查一次（避開整點，整點排隊最塞）
   workflow_dispatch:
     inputs:
       force:

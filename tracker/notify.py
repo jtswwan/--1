@@ -63,6 +63,10 @@ def _body(snapshot: Snapshot, previous: dict | None, reason: str) -> tuple[str, 
     if others:
         lines += ["", "其他進行中的活動："] + [f"・{p.describe()}" for p in others]
 
+    coupons = snapshot.usable_coupons
+    if coupons:
+        lines += ["", "這個價位用得到的券（要自己去領）："] + [f"・{c.describe()}" for c in coupons]
+
     lines += ["", snapshot.url]
     text = "\n".join(lines)
 
